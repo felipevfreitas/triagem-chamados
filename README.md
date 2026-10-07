@@ -1,80 +1,52 @@
-# Triagem Automática de Chamados de Suporte
+# Triagem de Chamados com n8n
 
-Automação construída com **n8n** que recebe chamados de suporte por um formulário, classifica cada um por **categoria** e **prioridade**, registra tudo em uma planilha do **Google Sheets** e envia um alerta no **Discord** quando o chamado é urgente.
+Um fluxo no n8n que recebe chamados de suporte por um formulário, tenta descobrir sozinho do que se trata e o quão urgente é, salva tudo numa planilha do Google Sheets e me avisa no Discord quando aparece algo urgente.
 
 ![Fluxo no n8n](imagens/fluxo.png)
 
-## Motivação
+## Por que fiz isso
 
-Trabalhei quase 2 anos com suporte de software e via na prática o tempo gasto para ler, classificar e priorizar cada chamado manualmente. Este projeto automatiza essa primeira triagem, para que os chamados urgentes cheguem mais rápido a quem pode resolvê-los.
+Trabalhei quase dois anos com suporte de software, e uma parte chata do dia era ler cada chamado que chegava, entender o que era e decidir o que atender primeiro. Quis ver se dava para automatizar pelo menos essa primeira triagem, e aproveitei para aprender n8n, que eu nunca tinha usado.
 
 ## Como funciona
 
-```
-Formulário → Classificação (JavaScript) → Google Sheets → Prioridade alta? → Alerta no Discord
-```
-
-1. **Formulário:** o usuário informa nome, e-mail, título e descrição do problema.
-2. **Classificação:** um nó de código em JavaScript ([`classificacao.js`](classificacao.js)) normaliza o texto (minúsculas e sem acentos) e procura palavras-chave para definir:
-   - **Categoria:** Acesso, Erro, Sugestão, Dúvida ou Outros
-   - **Prioridade:** Alta (palavras urgentes como "travou", "fora do ar", "não consigo"), Média (erros e problemas de acesso) ou Baixa
-   - **Protocolo:** identificador do chamado gerado a partir da data e hora
-3. **Registro:** todo chamado é salvo em uma planilha com data, categoria, prioridade e status.
-4. **Alerta:** chamados de prioridade **Alta** disparam uma mensagem no Discord via webhook.
-
-## Demonstração
-
-**Formulário de abertura**
+A pessoa abre o chamado num formulário simples (nome, e-mail, título e descrição):
 
 ![Formulário](imagens/formulario.png)
 
-**Planilha de chamados**, com cores por prioridade e status editável pela equipe
+Depois disso, um nó de código em JavaScript ([`classificacao.js`](classificacao.js)) lê o título e a descrição e procura palavras-chave:
+
+- **Categoria:** se fala de senha ou login, é *Acesso*. Se fala de erro, bug, travou etc., é *Erro*. Também tem *Sugestão*, *Dúvida* e *Outros* quando nada bate.
+- **Prioridade:** palavras como "urgente", "travou", "fora do ar" ou "não consigo" deixam o chamado como *Alta*. Erros e problemas de acesso ficam *Média*, e o resto *Baixa*.
+
+Todo chamado vai para a planilha. Formatei com cores por prioridade e um campo de status para a equipe ir atualizando:
 
 ![Planilha](imagens/planilha.png)
 
-**Alertas de chamados urgentes no Discord**
+E se a prioridade for alta, chega um alerta no Discord:
 
 ![Discord](imagens/discord.png)
 
-## Tecnologias
+## O que aprendi (e os bugs no caminho)
 
-- n8n (automação de fluxos)
-- JavaScript
-- Google Sheets API (OAuth2)
-- Discord Webhooks
+- No começo, **tudo caía em "Outros"**. Depois de um tempo descobri que tinha usado aspas simples em vez de crase na template string, então o texto que eu analisava era literalmente `${titulo} ${descricao}` 😅
+- Precisei **remover os acentos** do texto antes de comparar, senão "Não consigo" e "nao consigo" eram tratados como coisas diferentes.
+- Testando, vi que "sistema fora do ar" era urgente mas caía em "Outros", porque "fora do ar" só estava na lista de urgência. Ajustei as listas.
+- Aprendi a configurar OAuth no Google Cloud para conectar o Google Sheets, e a usar webhook do Discord sem deixar a URL exposta no código (ela fica só nas credenciais do n8n).
 
-## Como executar
+## Limitações / o que eu ainda quero melhorar
 
-1. Instale o [Node.js](https://nodejs.org) (versão LTS) e rode o n8n localmente:
-   ```
-   npx n8n
-   ```
-   O editor fica disponível em `http://localhost:5678`.
-2. No n8n, importe o arquivo [`triagem-chamados.json`](triagem-chamados.json) (menu **⋯ → Import from file**).
-3. Crie uma planilha no Google Sheets com os cabeçalhos:
-   `protocolo | data | nome | email | titulo | descricao | categoria | prioridade | status`
-4. Configure as credenciais no n8n:
-   - **Google Sheets OAuth2:** crie um projeto no Google Cloud, ative as APIs do Google Sheets e do Google Drive e gere um Client ID e Client Secret.
-   - **Discord Webhook:** crie um webhook em um canal do seu servidor e cole a URL na credencial.
-5. No nó **Append row in sheet**, selecione a sua planilha.
-6. Clique em **Execute workflow** e envie um chamado pelo formulário.
+- A busca é por trecho exato da palavra, então "pararam" não é reconhecido como "parou". Dá para ver isso no chamado de pagamentos, que ficou como "Outros". Talvez dê para resolver comparando pelo radical das palavras, ou usando IA para classificar.
+- O protocolo é gerado pela data e hora, então dois chamados no mesmo segundo teriam o mesmo número. Ele também usa o horário UTC, e não o de Brasília.
+- Queria mandar um e-mail de confirmação com o protocolo para quem abriu o chamado.
 
-As credenciais ficam salvas apenas no n8n e não fazem parte do arquivo exportado.
+## Se quiser rodar
 
-## Exemplos de classificação
+1. Instale o [Node.js](https://nodejs.org) e rode `npx n8n` (no PowerShell, talvez precise ser `npx.cmd n8n`).
+2. Importe o [`triagem-chamados.json`](triagem-chamados.json) no n8n.
+3. Crie uma planilha com estas colunas: `protocolo, data, nome, email, titulo, descricao, categoria, prioridade, status`.
+4. Configure as credenciais do Google Sheets (OAuth2) e do Discord (webhook), e selecione a sua planilha no nó do Google Sheets.
 
-| Título | Descrição | Categoria | Prioridade |
-|---|---|---|---|
-| Sistema fora do ar | Nenhum usuário consegue acessar o sistema desde as 14h | Erro | Alta |
-| Não consigo fazer login | Minha senha não está funcionando desde ontem | Acesso | Alta |
-| Usuário bloqueado | Meu acesso foi bloqueado após trocar de computador | Acesso | Média |
-| Erro ao gerar relatório | O PDF do relatório mensal sai em branco | Erro | Média |
-| Sugestão de melhoria | Seria bom ter um filtro por data na tela de pedidos | Sugestão | Baixa |
-| Dúvida sobre exportação | Como faço para exportar a lista de clientes para Excel? | Dúvida | Baixa |
+## Feito com
 
-## Próximos passos
-
-- **Palavras-chave mais flexíveis:** hoje a busca é por trecho exato, então "pararam" não é reconhecido como "parou". Comparar pelo radical das palavras ou usar um modelo de IA para classificar deixaria a triagem mais precisa.
-- **Protocolo único:** gerar um ID sequencial, evitando protocolos repetidos em chamados enviados no mesmo segundo, e usar o horário de Brasília no protocolo.
-- **Confirmação por e-mail:** enviar ao usuário uma mensagem com o número do protocolo.
-- **Painel de indicadores:** gráficos com volume de chamados por categoria e tempo de resolução.
+n8n · JavaScript · Google Sheets · Discord
