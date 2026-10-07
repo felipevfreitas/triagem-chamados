@@ -1,0 +1,4 @@
+# Credenciais e dados locais do n8n — nunca subir para o GitHub
+.env
+.n8n/
+*.credentials.json

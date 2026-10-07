@@ -1,0 +1,310 @@
+{
+  "name": "Triagem de Chamados",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Abrir chamado de suporte",
+        "formDescription": "Descreva seu problema e nossa equipe entrará em contato.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Nome",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "E-mail",
+              "fieldType": "email",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Título",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Descrição",
+              "fieldType": "textarea",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        0,
+        0
+      ],
+      "id": "390197b6-051a-40c4-8d69-667a08c15cb2",
+      "name": "On form submission",
+      "webhookId": "9963cb3d-2ecd-439c-8bd1-3d9aa439d1ed"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const nome = $json['Nome'];\nconst email = $json['E-mail'];\nconst titulo = $json['Título'];\nconst descricao = $json['Descrição'];\n\nconst texto = `${titulo} ${descricao}`.toLocaleLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');\n\nfunction contem(palavras) {\n  for (const p of palavras) {\n    if (texto.includes(p)) {\n      return true;\n    }\n  }\n  return false;\n}\n\nconst regrasCategoria = [\n  { categoria: 'Acesso', palavras: ['senha', 'login', 'acesso', 'entrar', 'bloqueado', 'autenticacao'] },\n  { categoria: 'Erro', palavras: ['erro', 'bug', 'falha', 'travou', 'trava', 'parou', 'nao funciona', 'nao carrega', 'caiu', 'fora do ar'] },\n  { categoria: 'Sugestão', palavras: ['sugestao', 'sugiro', 'seria bom', 'poderia ter', 'melhoria', 'ideia'] },\n  { categoria: 'Dúvida', palavras: ['duvida', 'como faco', 'como fazer', 'onde fica', 'e possivel', 'gostaria de saber'] },\n];\n\nlet categoria = 'Outros';\n\nfor (const regra of regrasCategoria) {\n  if (contem(regra.palavras)) {\n    categoria = regra.categoria;\n    break;\n  }\n}\n\nconst palavrasUrgentes = ['urgente', 'parou', 'caiu', 'fora do ar', 'nao consigo', 'todos os usuarios', 'travou'];\n\nlet prioridade = 'Baixa';\nif (contem(palavrasUrgentes)) {\n  prioridade = 'Alta';\n} else if (categoria === 'Erro' || categoria === 'Acesso') {\n  prioridade = 'Média';\n}\n\nconst agora = new Date();\nconst protocolo = 'CH-' + agora.toISOString().replace(/\\D/g, '').slice(0, 14);\n\nreturn {\n  json: {\n    protocolo,\n    data: agora.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),\n    nome,\n    email,\n    titulo,\n    descricao,\n    categoria,\n    prioridade,\n    status: 'Aberto',\n  },\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "id": "95b78a9e-54af-4049-9d6e-a54cd7edfa59",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "caa19417-c030-4554-b243-648ffb0e381d",
+              "leftValue": "={{ $json.prioridade }}",
+              "rightValue": "Alta",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        672,
+        0
+      ],
+      "id": "b9b4c987-271e-445a-9b49-1dea49de1277",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "authentication": "webhook",
+        "content": "=",
+        "options": {},
+        "embeds": {
+          "values": [
+            {
+              "description": "=**Categoria:** {{ $json.categoria }}\n**Aberto por:** {{ $json.nome }} ({{ $json.email }})\n**Título:** {{ $json.titulo }}\n**Descrição:** {{ $json.descricao }}",
+              "color": "#EE4836",
+              "title": "=Chamado urgente: {{ $json.protocolo }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [
+        896,
+        -96
+      ],
+      "id": "c6cc9973-16fa-4341-ba31-82bd5b5abd09",
+      "name": "Discord",
+      "webhookId": "9256a1de-8a57-4761-824f-8cdfb0557d5e",
+      "credentials": {
+        "discordWebhookApi": {
+          "id": "t1XPngT7X7dacFXH",
+          "name": "Discord Webhook account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "COLE_AQUI_O_ID_DA_SUA_PLANILHA",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Página1"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "protocolo",
+              "displayName": "protocolo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "data",
+              "displayName": "data",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "nome",
+              "displayName": "nome",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "titulo",
+              "displayName": "titulo",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "descricao",
+              "displayName": "descricao",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "categoria",
+              "displayName": "categoria",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "prioridade",
+              "displayName": "prioridade",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        448,
+        0
+      ],
+      "id": "f928ad40-6328-4567-811e-85edd74b713e",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "PQVC0Xt55gzsHtc6",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Discord",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "fdcbfc63-eab0-4d94-9d88-fb20a397a81d",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "nodeGroups": [],
+  "id": "B5ngAkABhLko3f0n",
+  "tags": []
+}
